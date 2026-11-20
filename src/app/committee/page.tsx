@@ -43,10 +43,17 @@ type Transaction = {
   users: { first_name: string; last_name: string }
 }
 
+type CreatedAccount = {
+  firstName: string
+  lastName: string
+  username: string
+  password: string
+}
+
 export default function CommitteePage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'award' | 'queue' | 'students'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'award' | 'queue' | 'students' | 'add'>('overview')
 
   // Data
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -60,6 +67,12 @@ export default function CommitteePage() {
   const [awardReason, setAwardReason] = useState('')
   const [awardLoading, setAwardLoading] = useState(false)
   const [awardSuccess, setAwardSuccess] = useState('')
+
+  // Add students form
+  const [namesInput, setNamesInput] = useState('')
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [created, setCreated] = useState<CreatedAccount[]>([])
 
   useEffect(() => {
     const stored = localStorage.getItem('user')
@@ -132,6 +145,71 @@ export default function CommitteePage() {
     setAwardLoading(false)
   }
 
+  async function handleCreateAccounts(e: React.FormEvent) {
+    e.preventDefault()
+    setCreateLoading(true)
+    setCreateError('')
+    setCreated([])
+
+    // Each line should be: First Last
+    const parsed = namesInput
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const parts = line.split(/\s+/)
+        return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+      })
+
+    const bad = parsed.filter(p => !p.firstName || !p.lastName)
+    if (bad.length > 0) {
+      setCreateError(`${bad.length} line(s) are missing a first or last name. Each line should look like: Jamie Liu`)
+      setCreateLoading(false)
+      return
+    }
+
+    // Send in batches of 20 so each request stays fast
+    const results: CreatedAccount[] = []
+    for (let i = 0; i < parsed.length; i += 20) {
+      const chunk = parsed.slice(i, i + 20)
+      const res = await fetch('/api/committee/create-students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId: user?.id, students: chunk }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setCreateError(
+          `${data.error || 'Something went wrong'}. ${results.length} account(s) were created before this error — remove those names from the box before trying again.`
+        )
+        break
+      }
+      results.push(...data.created)
+    }
+
+    setCreated(results)
+    if (results.length > 0) {
+      fetchAll(user!.id)
+      if (results.length === parsed.length) setNamesInput('')
+    }
+    setCreateLoading(false)
+  }
+
+  function downloadCsv() {
+    const q = (v: string) => `"${v.replace(/"/g, '""')}"`
+    const rows = [
+      'First name,Last name,Username,Password',
+      ...created.map(c => [c.firstName, c.lastName, c.username, c.password].map(q).join(',')),
+    ]
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'common-room-accounts.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   function handleLogout() {
     localStorage.removeItem('user')
     router.push('/')
@@ -146,6 +224,7 @@ export default function CommitteePage() {
     { key: 'award', label: 'Award Points', icon: '⭐' },
     { key: 'queue', label: 'Review Queue', icon: '📋' },
     { key: 'students', label: 'Students', icon: '👥' },
+    { key: 'add', label: 'Add Students', icon: '➕' },
   ]
 
   return (
@@ -402,6 +481,90 @@ export default function CommitteePage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ADD STUDENTS */}
+        {activeTab === 'add' && (
+          <div>
+            <div className="mb-6">
+              <h1 className="text-xl font-bold text-gray-900">Add students</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Paste a list of names and the system creates an account for each one.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-blue-100 p-6 max-w-xl mb-6">
+              <form onSubmit={handleCreateAccounts} className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Student names (one per line)
+                  </label>
+                  <textarea
+                    value={namesInput}
+                    onChange={e => setNamesInput(e.target.value)}
+                    rows={10}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    placeholder={'Jamie Liu\nAlex Kim\nPriya Osei'}
+                    required
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Usernames are made automatically (e.g. jamieliu) and a random password is generated for each student.
+                  </p>
+                </div>
+
+                {createError && (
+                  <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{createError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="bg-blue-600 text-white rounded-lg py-2 text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {createLoading ? 'Creating accounts…' : 'Create accounts'}
+                </button>
+              </form>
+            </div>
+
+            {created.length > 0 && (
+              <div className="bg-white rounded-xl border border-blue-100 p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-semibold text-gray-900">
+                    {created.length} account{created.length > 1 ? 's' : ''} created
+                  </div>
+                  <button
+                    onClick={downloadCsv}
+                    className="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Download CSV
+                  </button>
+                </div>
+                <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg mb-4">
+                  Save these passwords now. They are stored scrambled and can&apos;t be shown again once you leave this page.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                        <th className="py-2 pr-4 font-medium">Name</th>
+                        <th className="py-2 pr-4 font-medium">Username</th>
+                        <th className="py-2 font-medium">Password</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {created.map(c => (
+                        <tr key={c.username}>
+                          <td className="py-2 pr-4 text-gray-900">{c.firstName} {c.lastName}</td>
+                          <td className="py-2 pr-4 text-gray-600 font-mono">{c.username}</td>
+                          <td className="py-2 text-gray-900 font-mono">{c.password}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
