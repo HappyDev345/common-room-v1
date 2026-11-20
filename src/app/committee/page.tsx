@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import ChangePasswordForm from '@/components/ChangePasswordForm'
 
 type User = {
   id: string
@@ -53,7 +54,7 @@ type CreatedAccount = {
 export default function CommitteePage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'award' | 'queue' | 'students' | 'add'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'award' | 'queue' | 'students' | 'add' | 'account'>('overview')
 
   // Data
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -73,6 +74,9 @@ export default function CommitteePage() {
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState('')
   const [created, setCreated] = useState<CreatedAccount[]>([])
+
+  // Password reset result
+  const [resetResult, setResetResult] = useState<{ name: string; username: string; password: string } | null>(null)
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -211,6 +215,24 @@ export default function CommitteePage() {
     URL.revokeObjectURL(url)
   }
 
+  async function handleResetPassword(s: Student) {
+    const name = `${s.first_name} ${s.last_name}`
+    if (!window.confirm(`Reset the password for ${name}? Their old password will stop working.`)) return
+
+    setResetResult(null)
+    const res = await fetch('/api/committee/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: s.id }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setResetResult({ name, username: data.username, password: data.password })
+    } else {
+      window.alert(data.error || 'Could not reset password')
+    }
+  }
+
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/')
@@ -226,6 +248,7 @@ export default function CommitteePage() {
     { key: 'queue', label: 'Review Queue', icon: '📋' },
     { key: 'students', label: 'Students', icon: '👥' },
     { key: 'add', label: 'Add Students', icon: '➕' },
+    { key: 'account', label: 'My Account', icon: '🔒' },
   ]
 
   return (
@@ -569,6 +592,22 @@ export default function CommitteePage() {
           </div>
         )}
 
+        {/* MY ACCOUNT */}
+        {activeTab === 'account' && (
+          <div>
+            <div className="mb-6">
+              <h1 className="text-xl font-bold text-gray-900">My account</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Signed in as <span className="font-medium text-gray-700">@{user.username}</span>
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-blue-100 p-6 max-w-md">
+              <div className="text-sm font-semibold text-gray-500 mb-4">Change password</div>
+              <ChangePasswordForm />
+            </div>
+          </div>
+        )}
+
         {/* STUDENTS */}
         {activeTab === 'students' && (
           <div>
@@ -576,6 +615,21 @@ export default function CommitteePage() {
               <h1 className="text-xl font-bold text-gray-900">Students</h1>
               <p className="text-sm text-gray-500 mt-1">{students.length} students registered.</p>
             </div>
+
+            {resetResult && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                <div className="text-sm font-semibold text-gray-900">
+                  New password for {resetResult.name}
+                </div>
+                <div className="text-sm text-gray-700 mt-1">
+                  Username: <span className="font-mono">{resetResult.username}</span> · Password:{' '}
+                  <span className="font-mono font-semibold">{resetResult.password}</span>
+                </div>
+                <p className="text-xs text-amber-700 mt-2">
+                  Save this now. It can&apos;t be shown again once you leave this page. The student can change it themselves under Account.
+                </p>
+              </div>
+            )}
 
             <div className="bg-white rounded-xl border border-blue-100 p-5">
               {students.length === 0 ? (
@@ -593,7 +647,15 @@ export default function CommitteePage() {
                           <div className="text-xs text-gray-400">@{s.username}</div>
                         </div>
                       </div>
-                      <div className="text-sm font-bold text-blue-600">{s.balance} pts</div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-sm font-bold text-blue-600">{s.balance} pts</div>
+                        <button
+                          onClick={() => handleResetPassword(s)}
+                          className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
+                        >
+                          Reset password
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

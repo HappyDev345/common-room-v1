@@ -16,6 +16,7 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
   { href: '/jobs', label: 'Jobs', icon: '🛠' },
   { href: '/rewards', label: 'Rewards', icon: '🎁' },
+  { href: '/account', label: 'Account', icon: '🔒' },
 ]
 
 export default function StudentShell({
