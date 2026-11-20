@@ -18,7 +18,7 @@ function JobsContent({ user }: { user: StudentUser }) {
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
 
   async function loadJobs() {
-    const res = await fetch(`/api/jobs?userId=${user.id}`)
+    const res = await fetch('/api/jobs')
     const data = await res.json()
     setJobs(data.jobs || [])
     setLoading(false)
@@ -35,7 +35,7 @@ function JobsContent({ user }: { user: StudentUser }) {
     const res = await fetch('/api/submissions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, jobId: job.id }),
+      body: JSON.stringify({ jobId: job.id }),
     })
     const data = await res.json()
 

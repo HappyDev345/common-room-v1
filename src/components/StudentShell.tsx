@@ -28,21 +28,23 @@ export default function StudentShell({
   const [user, setUser] = useState<StudentUser | null>(null)
 
   useEffect(() => {
-    const stored = localStorage.getItem('user')
-    if (!stored) {
-      router.push('/')
-      return
-    }
-    const parsed = JSON.parse(stored)
-    if (parsed.role !== 'student') {
-      router.push('/committee')
-      return
-    }
-    setUser(parsed)
+    fetch('/api/auth/me')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!data?.user) {
+          router.push('/')
+          return
+        }
+        if (data.user.role !== 'student') {
+          router.push('/committee')
+          return
+        }
+        setUser(data.user)
+      })
   }, [router])
 
-  function handleLogout() {
-    localStorage.removeItem('user')
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/')
   }
 

@@ -21,7 +21,7 @@ function RewardsContent({ user }: { user: StudentUser }) {
   async function load() {
     const [rewardsRes, summaryRes] = await Promise.all([
       fetch('/api/rewards'),
-      fetch(`/api/summary?userId=${user.id}`),
+      fetch('/api/summary'),
     ])
     const rewardsData = await rewardsRes.json()
     const summary = await summaryRes.json()
@@ -44,7 +44,7 @@ function RewardsContent({ user }: { user: StudentUser }) {
     const res = await fetch('/api/redemptions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, rewardId: reward.id }),
+      body: JSON.stringify({ rewardId: reward.id }),
     })
     const data = await res.json()
 

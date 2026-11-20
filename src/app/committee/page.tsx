@@ -75,12 +75,14 @@ export default function CommitteePage() {
   const [created, setCreated] = useState<CreatedAccount[]>([])
 
   useEffect(() => {
-    const stored = localStorage.getItem('user')
-    if (!stored) { router.push('/'); return }
-    const parsed = JSON.parse(stored)
-    if (parsed.role === 'student') { router.push('/dashboard'); return }
-    setUser(parsed)
-    fetchAll(parsed.id)
+    fetch('/api/auth/me')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!data?.user) { router.push('/'); return }
+        if (data.user.role === 'student') { router.push('/dashboard'); return }
+        setUser(data.user)
+        fetchAll(data.user.id)
+      })
   }, [])
 
   async function fetchAll(userId: string) {
@@ -106,7 +108,7 @@ export default function CommitteePage() {
     await fetch('/api/committee/submissions', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action, reviewedBy: user?.id }),
+      body: JSON.stringify({ id, action }),
     })
     setSubmissions(prev => prev.filter(s => s.id !== id))
     if (action === 'approved') fetchAll(user!.id)
@@ -116,7 +118,7 @@ export default function CommitteePage() {
     await fetch('/api/committee/redemptions', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action, reviewedBy: user?.id }),
+      body: JSON.stringify({ id, action }),
     })
     setRedemptions(prev => prev.filter(r => r.id !== id))
   }
@@ -132,7 +134,6 @@ export default function CommitteePage() {
         userId: selectedStudent,
         amount: parseInt(awardAmount),
         reason: awardReason,
-        awardedBy: user?.id,
       }),
     })
     if (res.ok) {
@@ -175,7 +176,7 @@ export default function CommitteePage() {
       const res = await fetch('/api/committee/create-students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requesterId: user?.id, students: chunk }),
+        body: JSON.stringify({ students: chunk }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -210,8 +211,8 @@ export default function CommitteePage() {
     URL.revokeObjectURL(url)
   }
 
-  function handleLogout() {
-    localStorage.removeItem('user')
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/')
   }
 

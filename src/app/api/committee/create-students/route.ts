@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabase-server'
+import { requireRole } from '@/lib/session'
 import bcrypt from 'bcryptjs'
 import { randomInt } from 'crypto'
 import { NextResponse } from 'next/server'
@@ -19,26 +20,18 @@ function baseUsername(first: string, last: string) {
 }
 
 export async function POST(request: Request) {
-  const { requesterId, students } = await request.json()
+  const auth = await requireRole(['committee', 'admin'])
+  if (!auth.ok) return auth.response
 
-  if (!requesterId || !Array.isArray(students) || students.length === 0) {
+  const { students } = await request.json()
+
+  if (!Array.isArray(students) || students.length === 0) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
   // Keep each request small so password hashing finishes quickly
   if (students.length > 25) {
     return NextResponse.json({ error: 'Maximum 25 students per request' }, { status: 400 })
-  }
-
-  // Only committee members and admins can create accounts
-  const { data: requester } = await supabaseServer
-    .from('users')
-    .select('role')
-    .eq('id', requesterId)
-    .single()
-
-  if (!requester || !['committee', 'admin'].includes(requester.role)) {
-    return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
   }
 
   // Load existing usernames so we never create a duplicate

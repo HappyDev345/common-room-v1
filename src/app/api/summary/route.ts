@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabase-server'
+import { requireRole } from '@/lib/session'
 import { NextResponse } from 'next/server'
 
 type SubmissionRow = {
@@ -15,11 +16,10 @@ type RedemptionRow = {
   rewards: { name: string; cost: number }
 }
 
-export async function GET(request: Request) {
-  const userId = new URL(request.url).searchParams.get('userId')
-  if (!userId) {
-    return NextResponse.json({ error: 'userId required' }, { status: 400 })
-  }
+export async function GET() {
+  const auth = await requireRole(['student'])
+  if (!auth.ok) return auth.response
+  const userId = auth.user.id
 
   const [tx, subs, reds] = await Promise.all([
     supabaseServer

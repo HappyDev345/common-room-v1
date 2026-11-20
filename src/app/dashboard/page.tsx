@@ -49,7 +49,7 @@ function DashboardContent({ user }: { user: StudentUser }) {
   const [summary, setSummary] = useState<Summary | null>(null)
 
   useEffect(() => {
-    fetch(`/api/summary?userId=${user.id}`)
+    fetch('/api/summary')
       .then(r => r.json())
       .then(setSummary)
   }, [user.id])

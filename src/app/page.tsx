@@ -29,9 +29,6 @@ export default function LoginPage() {
       return
     }
 
-    // Store user in localStorage for now
-    localStorage.setItem('user', JSON.stringify(data.user))
-
     // Redirect based on role
     if (data.user.role === 'student') {
       router.push('/dashboard')
@@ -65,6 +62,8 @@ export default function LoginPage() {
               onChange={e => setUsername(e.target.value)}
               className="w-full border border-gray-400 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g. jamieliu"
+              autoCapitalize="none"
+              autoCorrect="off"
               required
             />
           </div>

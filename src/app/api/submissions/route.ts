@@ -1,21 +1,15 @@
 import { supabaseServer } from '@/lib/supabase-server'
+import { requireRole } from '@/lib/session'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  const { userId, jobId } = await request.json()
+  const auth = await requireRole(['student'])
+  if (!auth.ok) return auth.response
+  const userId = auth.user.id
 
-  if (!userId || !jobId) {
+  const { jobId } = await request.json()
+  if (!jobId) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-  }
-
-  const { data: user } = await supabaseServer
-    .from('users')
-    .select('id, role')
-    .eq('id', userId)
-    .single()
-
-  if (!user || user.role !== 'student') {
-    return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
   }
 
   const { data: job } = await supabaseServer
