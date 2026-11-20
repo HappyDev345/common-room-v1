@@ -1,15 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-
-type User = {
-  id: string
-  first_name: string
-  last_name: string
-  username: string
-  role: string
-}
+import Link from 'next/link'
+import StudentShell, { StudentUser } from '@/components/StudentShell'
 
 type Transaction = {
   id: string
@@ -18,114 +11,110 @@ type Transaction = {
   created_at: string
 }
 
-export default function DashboardPage() {
-  const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [balance, setBalance] = useState(0)
+type RequestItem = {
+  id: string
+  kind: 'Job' | 'Reward'
+  label: string
+  status: string
+  created_at: string
+}
+
+type Summary = {
+  balance: number
+  held: number
+  available: number
+  transactions: Transaction[]
+  submissions: { id: string; status: string; created_at: string; jobs: { name: string } }[]
+  redemptions: { id: string; status: string; created_at: string; rewards: { name: string } }[]
+}
+
+const BADGE: Record<string, string> = {
+  pending: 'bg-amber-50 text-amber-700',
+  approved: 'bg-green-50 text-green-700',
+  declined: 'bg-red-50 text-red-600',
+}
+
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function DashboardContent({ user }: { user: StudentUser }) {
+  const [summary, setSummary] = useState<Summary | null>(null)
 
   useEffect(() => {
-    const stored = localStorage.getItem('user')
-    if (!stored) {
-      router.push('/')
-      return
-    }
-    const parsed = JSON.parse(stored)
-    if (parsed.role !== 'student') {
-      router.push('/committee')
-      return
-    }
-    setUser(parsed)
-    fetchTransactions(parsed.id)
-  }, [])
+    fetch(`/api/summary?userId=${user.id}`)
+      .then(r => r.json())
+      .then(setSummary)
+  }, [user.id])
 
-  async function fetchTransactions(userId: string) {
-    const res = await fetch(`/api/transactions?userId=${userId}`)
-    const data = await res.json()
-    setTransactions(data.transactions || [])
-    const total = (data.transactions || []).reduce(
-      (sum: number, t: Transaction) => sum + t.amount, 0
-    )
-    setBalance(total)
-  }
+  if (!summary) return <p className="text-sm text-gray-400">Loading…</p>
 
-  function handleLogout() {
-    localStorage.removeItem('user')
-    router.push('/')
-  }
-
-  if (!user) return null
+  const requests: RequestItem[] = [
+    ...summary.submissions.map(s => ({
+      id: s.id,
+      kind: 'Job' as const,
+      label: s.jobs?.name ?? 'Job',
+      status: s.status,
+      created_at: s.created_at,
+    })),
+    ...summary.redemptions.map(r => ({
+      id: r.id,
+      kind: 'Reward' as const,
+      label: r.rewards?.name ?? 'Reward',
+      status: r.status,
+      created_at: r.created_at,
+    })),
+  ]
+    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+    .slice(0, 6)
 
   return (
-    <main className="min-h-screen bg-blue-50">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-56 bg-white border-r border-blue-100 flex flex-col p-4">
-        <div className="flex items-center gap-3 mb-8 px-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">CR</div>
-          <div>
-            <div className="font-semibold text-sm text-gray-900">Common Room</div>
-            <div className="text-xs text-gray-400">Year 12</div>
+    <div className="max-w-4xl">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-gray-900">{greeting()}, {user.first_name} 👋</h1>
+        <p className="text-sm text-gray-500 mt-1">Here&apos;s how you&apos;re tracking.</p>
+      </div>
+
+      {/* Balance */}
+      <div className="bg-blue-600 rounded-2xl p-7 text-white mb-6">
+        <div className="text-sm opacity-75 mb-1">Your points</div>
+        <div className="text-5xl font-bold tracking-tight">{summary.available}</div>
+        <div className="text-sm opacity-70 mt-1">points available</div>
+        {summary.held > 0 && (
+          <div className="text-xs bg-white/15 inline-block rounded-lg px-3 py-1.5 mt-4">
+            {summary.held} pts held for pending reward requests
           </div>
+        )}
+        <div className="flex gap-3 mt-5">
+          <Link href="/jobs" className="bg-white/15 hover:bg-white/25 transition-colors text-sm font-semibold px-4 py-2 rounded-lg">
+            🛠 Earn points
+          </Link>
+          <Link href="/rewards" className="bg-white/15 hover:bg-white/25 transition-colors text-sm font-semibold px-4 py-2 rounded-lg">
+            🎁 Browse rewards
+          </Link>
         </div>
+      </div>
 
-        <nav className="flex flex-col gap-1 flex-1">
-          <div className="bg-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium">⊞ Dashboard</div>
-          <div className="text-gray-500 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">📋 My Points</div>
-          <div className="text-gray-500 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">🛠 Jobs</div>
-          <div className="text-gray-500 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">🎁 Rewards</div>
-          <div className="text-gray-500 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">🏆 Leaderboard</div>
-          <div className="text-gray-500 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">📢 Announcements</div>
-        </nav>
-
-        <div className="border-t border-blue-100 pt-4 px-2">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-xs">
-              {user.first_name[0]}{user.last_name[0]}
-            </div>
-            <div>
-              <div className="text-sm font-medium text-gray-900">{user.first_name} {user.last_name}</div>
-              <div className="text-xs text-gray-400">Student</div>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="w-full text-left text-xs text-gray-400 hover:text-red-500 px-2 py-1 transition-colors"
-          >
-            Sign out
-          </button>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <div className="ml-56 p-8">
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900">Good morning, {user.first_name} 👋</h1>
-          <p className="text-sm text-gray-500 mt-1">Here's how you're tracking this term.</p>
-        </div>
-
-        {/* Balance card */}
-        <div className="bg-blue-600 rounded-2xl p-7 text-white mb-6 flex items-center justify-between">
-          <div>
-            <div className="text-sm opacity-75 mb-1">Your points</div>
-            <div className="text-5xl font-bold tracking-tight">{balance}</div>
-            <div className="text-sm opacity-70 mt-1">points available</div>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Recent activity */}
         <div className="bg-white rounded-xl border border-blue-100 p-5">
           <div className="text-sm font-semibold text-gray-500 mb-4">Recent activity</div>
-          {transactions.length === 0 ? (
+          {summary.transactions.length === 0 ? (
             <p className="text-sm text-gray-400">No activity yet.</p>
           ) : (
             <div className="flex flex-col divide-y divide-gray-100">
-              {transactions.map(t => (
+              {summary.transactions.slice(0, 8).map(t => (
                 <div key={t.id} className="flex items-center justify-between py-3">
                   <div>
                     <div className="text-sm font-medium text-gray-900">{t.reason}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {new Date(t.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">{formatDate(t.created_at)}</div>
                   </div>
                   <div className={`text-sm font-bold ${t.amount > 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {t.amount > 0 ? '+' : ''}{t.amount}
@@ -135,7 +124,35 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* My requests */}
+        <div className="bg-white rounded-xl border border-blue-100 p-5">
+          <div className="text-sm font-semibold text-gray-500 mb-4">My requests</div>
+          {requests.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              Nothing yet. Submit a job or request a reward and it will show up here.
+            </p>
+          ) : (
+            <div className="flex flex-col divide-y divide-gray-100">
+              {requests.map(r => (
+                <div key={`${r.kind}-${r.id}`} className="flex items-center justify-between py-3">
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{r.label}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{r.kind} · {formatDate(r.created_at)}</div>
+                  </div>
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${BADGE[r.status] || ''}`}>
+                    {r.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </main>
+    </div>
   )
+}
+
+export default function DashboardPage() {
+  return <StudentShell>{user => <DashboardContent user={user} />}</StudentShell>
 }

@@ -15,20 +15,29 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const { id, action, reviewedBy } = await request.json()
 
-  // Update submission status
-  const { data: submission } = await supabaseServer
+  if (!['approved', 'declined'].includes(action)) {
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+  }
+
+  // Only update if still pending, so a double-click can't award points twice
+  const { data, error } = await supabaseServer
     .from('job_submissions')
     .update({ status: action, reviewed_by: reviewedBy })
     .eq('id', id)
-    .select('*, jobs(points), user_id')
+    .eq('status', 'pending')
+    .select('user_id, jobs(name, points)')
     .single()
 
-  // If approved, award the points
-  if (action === 'approved' && submission) {
+  if (error || !data) {
+    return NextResponse.json({ error: 'Already reviewed' }, { status: 409 })
+  }
+
+  if (action === 'approved') {
+    const job = data.jobs as unknown as { name: string; points: number }
     await supabaseServer.from('transactions').insert({
-      user_id: submission.user_id,
-      amount: submission.jobs.points,
-      reason: `Job approved: ${submission.jobs?.name || 'completed job'}`,
+      user_id: data.user_id,
+      amount: job.points,
+      reason: `Job approved: ${job.name}`,
       awarded_by: reviewedBy,
     })
   }

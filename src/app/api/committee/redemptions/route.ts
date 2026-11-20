@@ -15,19 +15,29 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const { id, action, reviewedBy } = await request.json()
 
-  const { data: redemption } = await supabaseServer
+  if (!['approved', 'declined'].includes(action)) {
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+  }
+
+  // Only update if still pending, so a double-click can't deduct points twice
+  const { data, error } = await supabaseServer
     .from('redemptions')
     .update({ status: action, reviewed_by: reviewedBy })
     .eq('id', id)
-    .select('*, rewards(name, cost), user_id')
+    .eq('status', 'pending')
+    .select('user_id, rewards(name, cost)')
     .single()
 
-  // If approved, deduct the points
-  if (action === 'approved' && redemption) {
+  if (error || !data) {
+    return NextResponse.json({ error: 'Already reviewed' }, { status: 409 })
+  }
+
+  if (action === 'approved') {
+    const reward = data.rewards as unknown as { name: string; cost: number }
     await supabaseServer.from('transactions').insert({
-      user_id: redemption.user_id,
-      amount: -redemption.rewards.cost,
-      reason: `Redeemed: ${redemption.rewards.name}`,
+      user_id: data.user_id,
+      amount: -reward.cost,
+      reason: `Redeemed: ${reward.name}`,
       awarded_by: reviewedBy,
     })
   }
