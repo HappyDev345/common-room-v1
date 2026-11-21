@@ -249,12 +249,12 @@ export default function CommitteePage() {
   const pendingCount = submissions.length + redemptions.length
 
   const navItems = [
-    { key: 'overview', label: 'Overview', icon: '⊞' },
+    { key: 'overview', label: 'Overview', icon: '📊' },
     { key: 'award', label: 'Award Points', icon: '⭐' },
     { key: 'queue', label: 'Review Queue', icon: '📋' },
     { key: 'students', label: 'Students', icon: '👥' },
     { key: 'add', label: 'Add Students', icon: '➕' },
-    { key: 'jobs', label: 'Jobs', icon: '🛠' },
+    { key: 'jobs', label: 'Jobs', icon: '🛠️' },
     { key: 'rewards', label: 'Rewards', icon: '🎁' },
     { key: 'challenges', label: 'Challenges', icon: '🎯' },
     { key: 'announcements', label: 'Announcements', icon: '📢' },

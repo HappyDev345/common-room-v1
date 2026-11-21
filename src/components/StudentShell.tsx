@@ -22,8 +22,8 @@ export function useStudent(): StudentUser {
 }
 
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
-  { href: '/jobs', label: 'Jobs', icon: '🛠' },
+  { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
+  { href: '/jobs', label: 'Jobs', icon: '🛠️' },
   { href: '/rewards', label: 'Rewards', icon: '🎁' },
   { href: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
   { href: '/account', label: 'Account', icon: '🔒' },
