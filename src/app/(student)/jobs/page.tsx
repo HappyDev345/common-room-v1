@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import StudentShell, { StudentUser } from '@/components/StudentShell'
+import { useStudent } from '@/components/StudentShell'
 
 type Job = {
   id: string
@@ -11,7 +11,9 @@ type Job = {
   pending: boolean
 }
 
-function JobsContent({ user }: { user: StudentUser }) {
+export default function JobsPage() {
+  const user = useStudent()
+
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -105,8 +107,4 @@ function JobsContent({ user }: { user: StudentUser }) {
       )}
     </div>
   )
-}
-
-export default function JobsPage() {
-  return <StudentShell>{user => <JobsContent user={user} />}</StudentShell>
 }

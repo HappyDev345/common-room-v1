@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 
@@ -12,6 +12,15 @@ export type StudentUser = {
   role: string
 }
 
+const StudentContext = createContext<StudentUser | null>(null)
+
+// Pages call this to get the signed-in student
+export function useStudent(): StudentUser {
+  const user = useContext(StudentContext)
+  if (!user) throw new Error('useStudent must be used inside the student layout')
+  return user
+}
+
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
   { href: '/jobs', label: 'Jobs', icon: '🛠' },
@@ -20,15 +29,12 @@ const NAV = [
   { href: '/account', label: 'Account', icon: '🔒' },
 ]
 
-export default function StudentShell({
-  children,
-}: {
-  children: (user: StudentUser) => ReactNode
-}) {
+export default function StudentShell({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const [user, setUser] = useState<StudentUser | null>(null)
 
+  // Runs once when the student area first loads, not on every tab change
   useEffect(() => {
     fetch('/api/auth/me')
       .then(res => (res.ok ? res.json() : null))
@@ -49,8 +55,6 @@ export default function StudentShell({
     await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/')
   }
-
-  if (!user) return null
 
   return (
     <main className="min-h-screen bg-blue-50">
@@ -81,15 +85,17 @@ export default function StudentShell({
         </nav>
 
         <div className="border-t border-blue-100 pt-4 px-2">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-xs">
-              {user.first_name[0]}{user.last_name[0]}
+          {user && (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-xs">
+                {user.first_name[0]}{user.last_name[0]}
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-900">{user.first_name} {user.last_name}</div>
+                <div className="text-xs text-gray-400">Student</div>
+              </div>
             </div>
-            <div>
-              <div className="text-sm font-medium text-gray-900">{user.first_name} {user.last_name}</div>
-              <div className="text-xs text-gray-400">Student</div>
-            </div>
-          </div>
+          )}
           <button
             onClick={handleLogout}
             className="w-full text-left text-xs text-gray-400 hover:text-red-500 px-2 py-1 transition-colors"
@@ -108,8 +114,14 @@ export default function StudentShell({
         <button onClick={handleLogout} className="text-xs text-gray-400">Sign out</button>
       </header>
 
-      {/* Page content */}
-      <div className="md:ml-56 p-5 md:p-8 pb-24 md:pb-8">{children(user)}</div>
+      {/* Page content: only this part changes when you switch tabs */}
+      <div className="md:ml-56 p-5 md:p-8 pb-24 md:pb-8">
+        {user ? (
+          <StudentContext.Provider value={user}>{children}</StudentContext.Provider>
+        ) : (
+          <p className="text-sm text-gray-400">Loading…</p>
+        )}
+      </div>
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-blue-100 flex">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import StudentShell, { StudentUser } from '@/components/StudentShell'
+import { useStudent } from '@/components/StudentShell'
 
 type Transaction = {
   id: string
@@ -62,7 +62,9 @@ function greeting() {
   return 'Good evening'
 }
 
-function DashboardContent({ user }: { user: StudentUser }) {
+export default function DashboardPage() {
+  const user = useStudent()
+
   const [summary, setSummary] = useState<Summary | null>(null)
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [challenges, setChallenges] = useState<Challenge[]>([])
@@ -232,8 +234,4 @@ function DashboardContent({ user }: { user: StudentUser }) {
       </div>
     </div>
   )
-}
-
-export default function DashboardPage() {
-  return <StudentShell>{user => <DashboardContent user={user} />}</StudentShell>
 }

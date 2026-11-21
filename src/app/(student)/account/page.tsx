@@ -1,9 +1,11 @@
 'use client'
 
-import StudentShell, { StudentUser } from '@/components/StudentShell'
+import { useStudent } from '@/components/StudentShell'
 import ChangePasswordForm from '@/components/ChangePasswordForm'
 
-function AccountContent({ user }: { user: StudentUser }) {
+export default function AccountPage() {
+  const user = useStudent()
+
   return (
     <div className="max-w-md">
       <div className="mb-6">
@@ -19,8 +21,4 @@ function AccountContent({ user }: { user: StudentUser }) {
       </div>
     </div>
   )
-}
-
-export default function AccountPage() {
-  return <StudentShell>{user => <AccountContent user={user} />}</StudentShell>
 }

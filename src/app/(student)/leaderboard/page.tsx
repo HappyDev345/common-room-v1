@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import StudentShell, { StudentUser } from '@/components/StudentShell'
+import { useStudent } from '@/components/StudentShell'
 
 type Row = { rank: number; name: string; earned: number; isYou: boolean }
 
@@ -12,7 +12,9 @@ type Data = {
   total?: number
 }
 
-function LeaderboardContent({ user }: { user: StudentUser }) {
+export default function LeaderboardPage() {
+  const user = useStudent()
+
   const [data, setData] = useState<Data | null>(null)
 
   useEffect(() => {
@@ -76,8 +78,4 @@ function LeaderboardContent({ user }: { user: StudentUser }) {
       </div>
     </div>
   )
-}
-
-export default function LeaderboardPage() {
-  return <StudentShell>{user => <LeaderboardContent user={user} />}</StudentShell>
 }

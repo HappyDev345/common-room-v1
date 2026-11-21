@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import StudentShell, { StudentUser } from '@/components/StudentShell'
+import { useStudent } from '@/components/StudentShell'
 
 type Reward = {
   id: string
@@ -10,7 +10,9 @@ type Reward = {
   cost: number
 }
 
-function RewardsContent({ user }: { user: StudentUser }) {
+export default function RewardsPage() {
+  const user = useStudent()
+
   const [rewards, setRewards] = useState<Reward[]>([])
   const [available, setAvailable] = useState(0)
   const [held, setHeld] = useState(0)
@@ -119,8 +121,4 @@ function RewardsContent({ user }: { user: StudentUser }) {
       )}
     </div>
   )
-}
-
-export default function RewardsPage() {
-  return <StudentShell>{user => <RewardsContent user={user} />}</StudentShell>
 }
