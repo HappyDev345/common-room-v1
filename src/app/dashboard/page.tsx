@@ -28,6 +28,23 @@ type Summary = {
   redemptions: { id: string; status: string; created_at: string; rewards: { name: string } }[]
 }
 
+type Announcement = {
+  id: string
+  title: string
+  body: string
+  created_at: string
+}
+
+type Challenge = {
+  id: string
+  title: string
+  description: string | null
+  goal: number
+  progress: number
+  reward_points: number
+  status: string
+}
+
 const BADGE: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-700',
   approved: 'bg-green-50 text-green-700',
@@ -47,11 +64,19 @@ function greeting() {
 
 function DashboardContent({ user }: { user: StudentUser }) {
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [challenges, setChallenges] = useState<Challenge[]>([])
 
   useEffect(() => {
     fetch('/api/summary')
       .then(r => r.json())
       .then(setSummary)
+    fetch('/api/announcements')
+      .then(r => r.json())
+      .then(d => setAnnouncements(d.announcements || []))
+    fetch('/api/challenges')
+      .then(r => r.json())
+      .then(d => setChallenges(d.challenges || []))
   }, [user.id])
 
   if (!summary) return <p className="text-sm text-gray-400">Loading…</p>
@@ -145,6 +170,62 @@ function DashboardContent({ user }: { user: StudentUser }) {
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+        {/* Announcements */}
+        <div className="bg-white rounded-xl border border-blue-100 p-5">
+          <div className="text-sm font-semibold text-gray-500 mb-4">Announcements</div>
+          {announcements.length === 0 ? (
+            <p className="text-sm text-gray-400">No announcements right now.</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-gray-100">
+              {announcements.map(a => (
+                <div key={a.id} className="py-3">
+                  <div className="text-sm font-semibold text-gray-900">{a.title}</div>
+                  <div className="text-xs text-gray-600 mt-1 whitespace-pre-line">{a.body}</div>
+                  <div className="text-xs text-gray-400 mt-1.5">{formatDate(a.created_at)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Challenges */}
+        <div className="bg-white rounded-xl border border-blue-100 p-5">
+          <div className="text-sm font-semibold text-gray-500 mb-4">Challenges</div>
+          {challenges.length === 0 ? (
+            <p className="text-sm text-gray-400">No challenges right now.</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-gray-100">
+              {challenges.map(c => {
+                const pct = Math.min(100, Math.round((c.progress / c.goal) * 100))
+                return (
+                  <div key={c.id} className="py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold text-gray-900">{c.title}</div>
+                      {c.status === 'completed' && (
+                        <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                          ✓ Done
+                        </span>
+                      )}
+                    </div>
+                    {c.description && (
+                      <div className="text-xs text-gray-500 mt-1">{c.description}</div>
+                    )}
+                    <div className="h-2 bg-blue-50 rounded-full overflow-hidden mt-3">
+                      <div className="h-full bg-blue-600 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400 mt-1.5">
+                      <span>{c.progress} / {c.goal}</span>
+                      <span>{c.reward_points > 0 ? `+${c.reward_points} pts each when done` : `${pct}%`}</span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ChangePasswordForm from '@/components/ChangePasswordForm'
+import ItemsManager, { JOBS_CONFIG, REWARDS_CONFIG } from '@/components/committee/ItemsManager'
+import AnnouncementsManager from '@/components/committee/AnnouncementsManager'
+import ChallengesManager from '@/components/committee/ChallengesManager'
+import SettingsPanel from '@/components/committee/SettingsPanel'
 
 type User = {
   id: string
@@ -54,7 +58,9 @@ type CreatedAccount = {
 export default function CommitteePage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'award' | 'queue' | 'students' | 'add' | 'account'>('overview')
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'award' | 'queue' | 'students' | 'add' | 'jobs' | 'rewards' | 'challenges' | 'announcements' | 'settings' | 'account'
+  >('overview')
 
   // Data
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -248,6 +254,11 @@ export default function CommitteePage() {
     { key: 'queue', label: 'Review Queue', icon: '📋' },
     { key: 'students', label: 'Students', icon: '👥' },
     { key: 'add', label: 'Add Students', icon: '➕' },
+    { key: 'jobs', label: 'Jobs', icon: '🛠' },
+    { key: 'rewards', label: 'Rewards', icon: '🎁' },
+    { key: 'challenges', label: 'Challenges', icon: '🎯' },
+    { key: 'announcements', label: 'Announcements', icon: '📢' },
+    { key: 'settings', label: 'Settings', icon: '⚙️' },
     { key: 'account', label: 'My Account', icon: '🔒' },
   ]
 
@@ -263,7 +274,7 @@ export default function CommitteePage() {
           </div>
         </div>
 
-        <nav className="flex flex-col gap-1 flex-1">
+        <nav className="flex flex-col gap-1 flex-1 overflow-y-auto">
           {navItems.map(item => (
             <button
               key={item.key}
@@ -591,6 +602,13 @@ export default function CommitteePage() {
             )}
           </div>
         )}
+
+        {/* JOBS / REWARDS / CHALLENGES / ANNOUNCEMENTS / SETTINGS */}
+        {activeTab === 'jobs' && <ItemsManager config={JOBS_CONFIG} />}
+        {activeTab === 'rewards' && <ItemsManager config={REWARDS_CONFIG} />}
+        {activeTab === 'challenges' && <ChallengesManager />}
+        {activeTab === 'announcements' && <AnnouncementsManager />}
+        {activeTab === 'settings' && <SettingsPanel />}
 
         {/* MY ACCOUNT */}
         {activeTab === 'account' && (
