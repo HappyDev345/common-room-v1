@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, fullName } from '@/lib/audit'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
 
   const { data: job } = await supabaseServer
     .from('jobs')
-    .select('id, active, student_submittable')
+    .select('id, name, points, active, student_submittable')
     .eq('id', jobId)
     .single()
 
@@ -43,5 +44,16 @@ export async function POST(request: Request) {
     .insert({ user_id: userId, job_id: jobId })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAudit({
+    action: 'job.submitted',
+    actor: auth.user,
+    summary: `${fullName(auth.user)} submitted "${job.name}" for review`,
+    fields: {
+      Job: job.name,
+      'Points if approved': `+${job.points}`,
+    },
+  })
+
   return NextResponse.json({ success: true })
 }

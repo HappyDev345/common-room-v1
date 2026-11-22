@@ -7,6 +7,7 @@ import ItemsManager, { JOBS_CONFIG, REWARDS_CONFIG } from '@/components/committe
 import AnnouncementsManager from '@/components/committee/AnnouncementsManager'
 import ChallengesManager from '@/components/committee/ChallengesManager'
 import SettingsPanel from '@/components/committee/SettingsPanel'
+import AuditLog from '@/components/committee/AuditLog'
 
 type User = {
   id: string
@@ -59,7 +60,7 @@ export default function CommitteePage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'award' | 'queue' | 'students' | 'add' | 'jobs' | 'rewards' | 'challenges' | 'announcements' | 'settings' | 'account'
+    'overview' | 'award' | 'queue' | 'students' | 'add' | 'jobs' | 'rewards' | 'challenges' | 'announcements' | 'settings' | 'audit' | 'account'
   >('overview')
 
   // Data
@@ -259,6 +260,7 @@ export default function CommitteePage() {
     { key: 'challenges', label: 'Challenges', icon: '🎯' },
     { key: 'announcements', label: 'Announcements', icon: '📢' },
     { key: 'settings', label: 'Settings', icon: '⚙️' },
+    { key: 'audit', label: 'Audit Log', icon: '🧾' },
     { key: 'account', label: 'My Account', icon: '🔒' },
   ]
 
@@ -275,7 +277,9 @@ export default function CommitteePage() {
         </div>
 
         <nav className="flex flex-col gap-1 flex-1 overflow-y-auto">
-          {navItems.map(item => (
+          {navItems
+            .filter(item => item.key !== 'audit' || user.role === 'admin')
+            .map(item => (
             <button
               key={item.key}
               onClick={() => setActiveTab(item.key as typeof activeTab)}
@@ -609,6 +613,7 @@ export default function CommitteePage() {
         {activeTab === 'challenges' && <ChallengesManager />}
         {activeTab === 'announcements' && <AnnouncementsManager />}
         {activeTab === 'settings' && <SettingsPanel />}
+        {activeTab === 'audit' && user.role === 'admin' && <AuditLog />}
 
         {/* MY ACCOUNT */}
         {activeTab === 'account' && (

@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, fullName } from '@/lib/audit'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -38,8 +39,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Already reviewed' }, { status: 409 })
   }
 
-  if (action === 'approved') {
-    const reward = data.rewards as unknown as { name: string; cost: number }
+  const reward = data.rewards as unknown as { name: string; cost: number }
+  const approved = action === 'approved'
+
+  if (approved) {
     await supabaseServer.from('transactions').insert({
       user_id: data.user_id,
       amount: -reward.cost,
@@ -47,6 +50,24 @@ export async function PATCH(request: Request) {
       awarded_by: auth.user.id,
     })
   }
+
+  const { data: student } = await supabaseServer
+    .from('users')
+    .select('id, first_name, last_name, username, role')
+    .eq('id', data.user_id)
+    .single()
+
+  await logAudit({
+    action: approved ? 'reward.approved' : 'reward.declined',
+    actor: auth.user,
+    target: student,
+    summary: `${fullName(auth.user)} ${approved ? 'approved' : 'declined'} ${student ? fullName(student) + "'s" : 'a'} request for "${reward.name}"`,
+    fields: {
+      Reward: reward.name,
+      Cost: `${reward.cost} pts`,
+      Result: approved ? 'Points deducted' : 'Held points released',
+    },
+  })
 
   return NextResponse.json({ success: true })
 }

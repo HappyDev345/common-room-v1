@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, fullName } from '@/lib/audit'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
 
   const { data: reward } = await supabaseServer
     .from('rewards')
-    .select('id, cost, available')
+    .select('id, name, cost, available')
     .eq('id', rewardId)
     .single()
 
@@ -49,5 +50,18 @@ export async function POST(request: Request) {
     .insert({ user_id: userId, reward_id: rewardId })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAudit({
+    action: 'reward.requested',
+    actor: auth.user,
+    summary: `${fullName(auth.user)} requested "${reward.name}"`,
+    fields: {
+      Reward: reward.name,
+      Cost: `${reward.cost} pts`,
+      'Balance before': `${balance} pts`,
+      'Available after hold': `${balance - held - reward.cost} pts`,
+    },
+  })
+
   return NextResponse.json({ success: true })
 }

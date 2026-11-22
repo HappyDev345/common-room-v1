@@ -30,6 +30,7 @@
 - [Project structure](#project-structure)
 - [Roles and permissions](#roles-and-permissions)
 - [Security model](#security-model)
+- [Audit log](#audit-log)
 - [Deploying to Vercel](#deploying-to-vercel)
 - [Running it day to day](#running-it-day-to-day)
 - [Known limitations](#known-limitations)
@@ -66,6 +67,7 @@ The student area is built to work well on a phone, with a bottom navigation bar 
 | **Challenges** | Set shared goals, track progress and pay out a reward to every student once |
 | **Announcements** | Post updates that appear on every student dashboard |
 | **Settings** | Turn the leaderboard on or off |
+| **Audit Log** | Admins only: a permanent record of who did what and when, with an optional live feed to a private Discord channel |
 | **My Account** | Change their own password |
 
 ---
@@ -147,6 +149,9 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # Long random string used to sign login cookies
 SESSION_SECRET=your-long-random-string
+
+# Optional: Discord webhook for the admin audit feed (see Audit log)
+DISCORD_WEBHOOK_URL=
 ```
 
 Generate a session secret with:
@@ -160,6 +165,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `NEXT_PUBLIC_SUPABASE_URL` | Address of your Supabase project |
 | `SUPABASE_SERVICE_ROLE_KEY` | All database access, from the server only. Has full access, so never expose it to the browser |
 | `SESSION_SECRET` | Signing login cookies. Changing it signs everyone out |
+| `DISCORD_WEBHOOK_URL` | Optional. Posts audit events to a private Discord channel. Anyone with this URL can post to the channel, so keep it secret |
 
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` may also appear in older setups. The app does not currently use it.
 
@@ -273,6 +279,24 @@ create table login_attempts (
 create index login_attempts_username_idx on login_attempts (username, created_at);
 create index login_attempts_ip_idx on login_attempts (ip, created_at);
 
+-- ============ Audit log (append-only record of what happened) ============
+create table audit_log (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  action text not null,
+  actor_id uuid references users(id) on delete set null,
+  actor_name text,
+  actor_role text,
+  target_user_id uuid references users(id) on delete set null,
+  target_name text,
+  summary text not null,
+  details jsonb not null default '{}'::jsonb,
+  ip text
+);
+
+create index audit_log_created_idx on audit_log (created_at desc);
+create index audit_log_action_idx on audit_log (action, created_at desc);
+
 -- ============ Balances view (used by the Students list and the leaderboard) ============
 create view student_balances as
 select
@@ -299,6 +323,7 @@ alter table announcements enable row level security;
 alter table challenges enable row level security;
 alter table settings enable row level security;
 alter table login_attempts enable row level security;
+alter table audit_log enable row level security;
 ```
 
 </details>
@@ -360,9 +385,12 @@ src/
 │   ├── StudentShell.tsx          Student layout and useStudent() hook
 │   ├── ChangePasswordForm.tsx
 │   └── committee/                ItemsManager, AnnouncementsManager,
-│                                 ChallengesManager, SettingsPanel
+│                                 ChallengesManager, SettingsPanel, AuditLog
 └── lib/
     ├── session.ts                Cookie sessions and requireRole() guard
+    ├── audit.ts                  logAudit(): saves an event and posts it to Discord
+    ├── audit-meta.ts             Event types, labels, emoji and colours
+    ├── discord.ts                Sends embeds to the Discord webhook
     ├── supabase-server.ts        Service-role database client (server only)
     └── supabase.ts               Public client (not currently used)
 
@@ -380,7 +408,7 @@ The `(student)` folder is a Next.js route group. The brackets keep the files org
 |------|--------|
 | **student** | View their own data, submit jobs, request rewards, view challenges and announcements, change their own password |
 | **committee** | Everything in the committee area, including creating students and resetting **student** passwords |
-| **admin** | Everything a committee member can do, plus resetting **any** account's password |
+| **admin** | Everything a committee member can do, plus resetting **any** account's password and viewing the audit log |
 
 Committee and admin accounts are created by promoting an existing student in the SQL Editor:
 
@@ -404,6 +432,38 @@ Use `'admin'` instead of `'committee'` for an admin. Every committee member shou
 - **Data collected is minimal.** First name, last name, username and a hashed password. No emails, phone numbers or school ID numbers.
 
 If you believe you have found a security problem, please tell the maintainer directly rather than opening a public issue.
+
+---
+
+## Audit log
+
+Every important action is recorded in the `audit_log` table, with the person who did it, the person it affected, the details, and the time. Admins can read it under **Audit Log** in the committee dashboard, filtered by category.
+
+**What is recorded**
+
+| Category | Events |
+|----------|--------|
+| Points | Awarded, deducted (with reason and new balance) |
+| Jobs | Submitted, approved, declined, created, updated |
+| Rewards | Requested, approved, declined, created, updated |
+| Accounts | Students created, password reset by committee, password changed |
+| Challenges | Created, progress updated, completed and paid out, removed |
+| Announcements | Posted, deleted |
+| Settings | Leaderboard turned on or off |
+| Security | Sign-ins, and sign-in lockouts |
+
+Passwords are never written to the log. Names are saved as they were at the time, so entries still make sense if an account is later deleted.
+
+**Discord feed (optional)**
+
+When `DISCORD_WEBHOOK_URL` is set, each event is also posted to a private Discord channel as a colour-coded embed. Sign-ins are saved to the log but not posted. To change which events post, edit the `discord` flag for each event in `src/lib/audit-meta.ts`.
+
+1. In Discord, open your private admin channel, then **Edit Channel > Integrations > Webhooks > New Webhook**.
+2. Copy the webhook URL.
+3. Add it as `DISCORD_WEBHOOK_URL` in `.env.local` and in the Vercel environment variables, then redeploy.
+4. Open **Audit Log** and click **Send test message**.
+
+Mentions such as `@everyone` in anything a user types are switched off in the messages, so they cannot ping anyone. Logging never blocks an action: if the database or Discord is unavailable, the action still goes through and the problem is written to the server logs.
 
 ---
 

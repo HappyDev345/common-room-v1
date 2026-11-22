@@ -1,8 +1,16 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, describeChanges, fullName } from '@/lib/audit'
 import { NextResponse } from 'next/server'
 
 const COLUMNS = 'id, name, description, cost, available'
+
+const LABELS: Record<string, string> = {
+  name: 'Name',
+  description: 'Description',
+  cost: 'Cost',
+  available: 'Visible to students',
+}
 
 type Fields = {
   name?: string
@@ -63,6 +71,18 @@ export async function POST(request: Request) {
 
   const { error } = await supabaseServer.from('rewards').insert(fields)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAudit({
+    action: 'reward.created',
+    actor: auth.user,
+    summary: `${fullName(auth.user)} created the reward "${fields.name}"`,
+    fields: {
+      Reward: fields.name,
+      Cost: `${fields.cost} pts`,
+      Description: fields.description,
+    },
+  })
+
   return NextResponse.json({ success: true })
 }
 
@@ -79,7 +99,26 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
+  const { data: before } = await supabaseServer
+    .from('rewards')
+    .select(COLUMNS)
+    .eq('id', body.id)
+    .single()
+
+  if (!before) return NextResponse.json({ error: 'Reward not found' }, { status: 404 })
+
   const { error } = await supabaseServer.from('rewards').update(fields).eq('id', body.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const changes = describeChanges(before, fields, LABELS)
+  if (changes.length > 0) {
+    await logAudit({
+      action: 'reward.updated',
+      actor: auth.user,
+      summary: `${fullName(auth.user)} updated the reward "${before.name}"`,
+      fields: { Reward: before.name, Changes: changes.join('\n') },
+    })
+  }
+
   return NextResponse.json({ success: true })
 }

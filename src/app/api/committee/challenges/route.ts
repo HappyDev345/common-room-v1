@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, fullName } from '@/lib/audit'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -46,6 +47,19 @@ export async function POST(request: Request) {
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAudit({
+    action: 'challenge.created',
+    actor: auth.user,
+    summary: `${fullName(auth.user)} created the challenge "${title}"`,
+    fields: {
+      Challenge: title,
+      Goal: goal,
+      'Reward per student': rewardPoints > 0 ? `${rewardPoints} pts` : 'None',
+      Description: description || null,
+    },
+  })
+
   return NextResponse.json({ success: true })
 }
 
@@ -72,6 +86,18 @@ export async function PATCH(request: Request) {
       .update({ status: 'archived' })
       .eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await logAudit({
+      action: 'challenge.removed',
+      actor: auth.user,
+      summary: `${fullName(auth.user)} removed the challenge "${challenge.title}"`,
+      fields: {
+        Challenge: challenge.title,
+        'Status before': challenge.status,
+        Progress: `${challenge.progress} / ${challenge.goal}`,
+      },
+    })
+
     return NextResponse.json({ success: true })
   }
 
@@ -89,6 +115,19 @@ export async function PATCH(request: Request) {
       .update({ progress })
       .eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await logAudit({
+      action: 'challenge.progress',
+      actor: auth.user,
+      summary: `${fullName(auth.user)} updated progress on "${challenge.title}"`,
+      fields: {
+        Challenge: challenge.title,
+        Change: amount > 0 ? `+${amount}` : `${amount}`,
+        Progress: `${challenge.progress} → ${progress} of ${challenge.goal}`,
+        Complete: `${Math.round((progress / challenge.goal) * 100)}%`,
+      },
+    })
+
     return NextResponse.json({ success: true })
   }
 
@@ -110,6 +149,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Already completed' }, { status: 409 })
   }
 
+  let paid = 0
   if (challenge.reward_points > 0) {
     const { data: students } = await supabaseServer
       .from('users')
@@ -133,8 +173,22 @@ export async function PATCH(request: Request) {
           .eq('id', id)
         return NextResponse.json({ error: 'Could not award points. Nothing was changed.' }, { status: 500 })
       }
+      paid = rows.length
     }
   }
+
+  await logAudit({
+    action: 'challenge.completed',
+    actor: auth.user,
+    summary: `${fullName(auth.user)} completed "${challenge.title}"${paid > 0 ? ` and paid ${challenge.reward_points} points to ${paid} students` : ''}`,
+    fields: {
+      Challenge: challenge.title,
+      Goal: challenge.goal,
+      'Reward per student': challenge.reward_points > 0 ? `${challenge.reward_points} pts` : 'None',
+      'Students paid': paid,
+      'Total points paid': paid * challenge.reward_points,
+    },
+  })
 
   return NextResponse.json({ success: true })
 }

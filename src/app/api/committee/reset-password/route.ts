@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, fullName } from '@/lib/audit'
 import bcrypt from 'bcryptjs'
 import { randomInt } from 'crypto'
 import { NextResponse } from 'next/server'
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
 
   const { data: target } = await supabaseServer
     .from('users')
-    .select('id, username, role')
+    .select('id, first_name, last_name, username, role')
     .eq('id', userId)
     .single()
 
@@ -55,5 +56,14 @@ export async function POST(request: Request) {
     .eq('id', target.id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // The new password is never written to the log
+  await logAudit({
+    action: 'password.reset',
+    actor: auth.user,
+    target,
+    summary: `${fullName(auth.user)} reset the password for ${fullName(target)}`,
+    fields: { 'Account type': target.role },
+  })
+
   return NextResponse.json({ username: target.username, password })
 }

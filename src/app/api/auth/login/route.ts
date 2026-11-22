@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { createSession } from '@/lib/session'
+import { logAudit } from '@/lib/audit'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
 
@@ -8,6 +9,10 @@ const MAX_FAILS_PER_USERNAME = 8 // wrong guesses on one account
 const MAX_FAILS_PER_IP = 100 // generous, because a whole school can share one IP address
 
 function getIp(request: Request) {
+  // Behind a Cloudflare Tunnel the real visitor address is in cf-connecting-ip
+  const cloudflareIp = request.headers.get('cf-connecting-ip')
+  if (cloudflareIp) return cloudflareIp.trim()
+
   const forwarded = request.headers.get('x-forwarded-for')
   if (forwarded) return forwarded.split(',')[0].trim()
   return request.headers.get('x-real-ip') || 'unknown'
@@ -70,6 +75,37 @@ export async function POST(request: Request) {
 
   if (!user || !valid) {
     await recordFailure(username, ip)
+
+    // Log once, at the moment a lock starts (not on every blocked attempt)
+    const usernameFails = (byUsername.count ?? 0) + 1
+    const ipFails = (byIp.count ?? 0) + 1
+    if (usernameFails === MAX_FAILS_PER_USERNAME) {
+      await logAudit({
+        action: 'auth.lockout',
+        target: user ?? null,
+        summary: `Sign-in for "${username}" was locked for ${WINDOW_MINUTES} minutes after ${usernameFails} failed attempts`,
+        fields: {
+          Username: username,
+          'Failed attempts': usernameFails,
+          'Locked for': `${WINDOW_MINUTES} minutes`,
+          'Account exists': user ? 'Yes' : 'No',
+          'IP address': ip,
+        },
+        ip,
+      })
+    } else if (ipFails === MAX_FAILS_PER_IP) {
+      await logAudit({
+        action: 'auth.lockout',
+        summary: `An IP address was locked for ${WINDOW_MINUTES} minutes after ${ipFails} failed sign-ins`,
+        fields: {
+          Scope: 'IP address',
+          'Failed attempts': ipFails,
+          'Locked for': `${WINDOW_MINUTES} minutes`,
+          'IP address': ip,
+        },
+        ip,
+      })
+    }
     return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 })
   }
 
@@ -77,6 +113,14 @@ export async function POST(request: Request) {
   await supabaseServer.from('login_attempts').delete().eq('username', username)
 
   await createSession(user.id)
+
+  await logAudit({
+    action: 'auth.login',
+    actor: user,
+    summary: `${user.first_name} ${user.last_name} (@${user.username}) signed in`,
+    fields: { 'IP address': ip },
+    ip,
+  })
 
   const { password_hash, ...safeUser } = user
   return NextResponse.json({ user: safeUser })

@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, fullName } from '@/lib/audit'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
 
@@ -44,5 +45,13 @@ export async function POST(request: Request) {
     .eq('id', auth.user.id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAudit({
+    action: 'password.changed',
+    actor: auth.user,
+    summary: `${fullName(auth.user)} changed their own password`,
+    fields: { 'Account type': auth.user.role },
+  })
+
   return NextResponse.json({ success: true })
 }

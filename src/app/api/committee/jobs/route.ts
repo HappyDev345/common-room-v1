@@ -1,8 +1,17 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, describeChanges, fullName } from '@/lib/audit'
 import { NextResponse } from 'next/server'
 
 const COLUMNS = 'id, name, description, points, student_submittable, active'
+
+const LABELS: Record<string, string> = {
+  name: 'Name',
+  description: 'Description',
+  points: 'Points',
+  student_submittable: 'Students can submit',
+  active: 'Visible to students',
+}
 
 type Fields = {
   name?: string
@@ -68,6 +77,19 @@ export async function POST(request: Request) {
 
   const { error } = await supabaseServer.from('jobs').insert(fields)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logAudit({
+    action: 'job.created',
+    actor: auth.user,
+    summary: `${fullName(auth.user)} created the job "${fields.name}"`,
+    fields: {
+      Job: fields.name,
+      Points: `${fields.points} pts`,
+      'Students can submit': fields.student_submittable ?? true,
+      Description: fields.description,
+    },
+  })
+
   return NextResponse.json({ success: true })
 }
 
@@ -84,7 +106,26 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
+  const { data: before } = await supabaseServer
+    .from('jobs')
+    .select(COLUMNS)
+    .eq('id', body.id)
+    .single()
+
+  if (!before) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+
   const { error } = await supabaseServer.from('jobs').update(fields).eq('id', body.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const changes = describeChanges(before, fields, LABELS)
+  if (changes.length > 0) {
+    await logAudit({
+      action: 'job.updated',
+      actor: auth.user,
+      summary: `${fullName(auth.user)} updated the job "${before.name}"`,
+      fields: { Job: before.name, Changes: changes.join('\n') },
+    })
+  }
+
   return NextResponse.json({ success: true })
 }

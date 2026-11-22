@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/session'
+import { logAudit, fullName, cut } from '@/lib/audit'
 import bcrypt from 'bcryptjs'
 import { randomInt } from 'crypto'
 import { NextResponse } from 'next/server'
@@ -90,6 +91,17 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Passwords are never written to the log
+  await logAudit({
+    action: 'students.created',
+    actor: auth.user,
+    summary: `${fullName(auth.user)} created ${created.length} student account${created.length === 1 ? '' : 's'}`,
+    fields: {
+      'Accounts created': created.length,
+      Students: cut(created.map(c => `${c.firstName} ${c.lastName} (@${c.username})`).join('\n'), 900),
+    },
+  })
 
   return NextResponse.json({ created })
 }
