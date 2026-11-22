@@ -8,6 +8,7 @@ import AnnouncementsManager from '@/components/committee/AnnouncementsManager'
 import ChallengesManager from '@/components/committee/ChallengesManager'
 import SettingsPanel from '@/components/committee/SettingsPanel'
 import AuditLog from '@/components/committee/AuditLog'
+import FeedbackInbox from '@/components/committee/FeedbackInbox'
 
 type User = {
   id: string
@@ -60,7 +61,7 @@ export default function CommitteePage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'award' | 'queue' | 'students' | 'add' | 'jobs' | 'rewards' | 'challenges' | 'announcements' | 'settings' | 'audit' | 'account'
+    'overview' | 'award' | 'queue' | 'students' | 'add' | 'jobs' | 'rewards' | 'challenges' | 'announcements' | 'settings' | 'audit' | 'inbox' | 'account'
   >('overview')
 
   // Data
@@ -82,6 +83,11 @@ export default function CommitteePage() {
   const [createError, setCreateError] = useState('')
   const [created, setCreated] = useState<CreatedAccount[]>([])
 
+  // Inbox badge and search boxes
+  const [feedbackNew, setFeedbackNew] = useState(0)
+  const [studentSearch, setStudentSearch] = useState('')
+  const [awardSearch, setAwardSearch] = useState('')
+
   // Password reset result
   const [resetResult, setResetResult] = useState<{ name: string; username: string; password: string } | null>(null)
 
@@ -93,6 +99,11 @@ export default function CommitteePage() {
         if (data.user.role === 'student') { router.push('/dashboard'); return }
         setUser(data.user)
         fetchAll(data.user.id)
+        fetch('/api/committee/feedback?summary=1')
+          .then(r => (r.ok ? r.json() : null))
+          .then(d => {
+            if (d) setFeedbackNew(d.newCount ?? 0)
+          })
       })
   }, [])
 
@@ -115,21 +126,45 @@ export default function CommitteePage() {
     if (redData.redemptions) setRedemptions(redData.redemptions)
   }
 
+  // Asks why a request is being declined. Returns null if the committee member cancels.
+  function askDeclineReason(): string | null {
+    const answer = window.prompt('Why is this being declined? The student will see your reason.')
+    if (answer === null) return null
+    const reason = answer.trim()
+    if (reason.length < 3) {
+      window.alert('Please give a short reason (at least 3 characters).')
+      return null
+    }
+    return reason
+  }
+
   async function handleReviewSubmission(id: string, action: 'approved' | 'declined') {
+    let reason = ''
+    if (action === 'declined') {
+      const asked = askDeclineReason()
+      if (asked === null) return
+      reason = asked
+    }
     await fetch('/api/committee/submissions', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action }),
+      body: JSON.stringify({ id, action, reason }),
     })
     setSubmissions(prev => prev.filter(s => s.id !== id))
     if (action === 'approved') fetchAll(user!.id)
   }
 
   async function handleReviewRedemption(id: string, action: 'approved' | 'declined') {
+    let reason = ''
+    if (action === 'declined') {
+      const asked = askDeclineReason()
+      if (asked === null) return
+      reason = asked
+    }
     await fetch('/api/committee/redemptions', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action }),
+      body: JSON.stringify({ id, action, reason }),
     })
     setRedemptions(prev => prev.filter(r => r.id !== id))
   }
@@ -249,10 +284,20 @@ export default function CommitteePage() {
 
   const pendingCount = submissions.length + redemptions.length
 
+  // Search by name or username
+  function matchesSearch(s: Student, term: string) {
+    const t = term.trim().toLowerCase()
+    if (!t) return true
+    return `${s.first_name} ${s.last_name} ${s.username}`.toLowerCase().includes(t)
+  }
+  const visibleStudents = students.filter(s => matchesSearch(s, studentSearch))
+  const awardOptions = students.filter(s => matchesSearch(s, awardSearch))
+
   const navItems = [
     { key: 'overview', label: 'Overview', icon: '📊' },
     { key: 'award', label: 'Award Points', icon: '⭐' },
     { key: 'queue', label: 'Review Queue', icon: '📋' },
+    { key: 'inbox', label: 'Inbox', icon: '📬' },
     { key: 'students', label: 'Students', icon: '👥' },
     { key: 'add', label: 'Add Students', icon: '➕' },
     { key: 'jobs', label: 'Jobs', icon: '🛠️' },
@@ -291,6 +336,11 @@ export default function CommitteePage() {
             >
               <span>{item.icon}</span>
               <span>{item.label}</span>
+              {item.key === 'inbox' && feedbackNew > 0 && (
+                <span className="ml-auto bg-blue-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {feedbackNew}
+                </span>
+              )}
               {item.key === 'queue' && pendingCount > 0 && (
                 <span className="ml-auto bg-blue-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
                   {pendingCount}
@@ -383,6 +433,13 @@ export default function CommitteePage() {
               <form onSubmit={handleAwardPoints} className="flex flex-col gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Student</label>
+                  <input
+                    type="search"
+                    value={awardSearch}
+                    onChange={e => setAwardSearch(e.target.value)}
+                    placeholder="Type to filter students"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                   <select
                     value={selectedStudent}
                     onChange={e => setSelectedStudent(e.target.value)}
@@ -390,7 +447,7 @@ export default function CommitteePage() {
                     required
                   >
                     <option value="">Select a student…</option>
-                    {students.map(s => (
+                    {awardOptions.map(s => (
                       <option key={s.id} value={s.id}>
                         {s.first_name} {s.last_name} ({s.balance} pts)
                       </option>
@@ -614,6 +671,7 @@ export default function CommitteePage() {
         {activeTab === 'announcements' && <AnnouncementsManager />}
         {activeTab === 'settings' && <SettingsPanel />}
         {activeTab === 'audit' && user.role === 'admin' && <AuditLog />}
+        {activeTab === 'inbox' && <FeedbackInbox onNewCountChange={setFeedbackNew} />}
 
         {/* MY ACCOUNT */}
         {activeTab === 'account' && (
@@ -636,7 +694,18 @@ export default function CommitteePage() {
           <div>
             <div className="mb-6">
               <h1 className="text-xl font-bold text-gray-900">Students</h1>
-              <p className="text-sm text-gray-500 mt-1">{students.length} students registered.</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {studentSearch.trim()
+                  ? `Showing ${visibleStudents.length} of ${students.length} students.`
+                  : `${students.length} students registered.`}
+              </p>
+              <input
+                type="search"
+                value={studentSearch}
+                onChange={e => setStudentSearch(e.target.value)}
+                placeholder="Search by name or username"
+                className="mt-3 w-full max-w-sm border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
 
             {resetResult && (
@@ -657,9 +726,11 @@ export default function CommitteePage() {
             <div className="bg-white rounded-xl border border-blue-100 p-5">
               {students.length === 0 ? (
                 <p className="text-sm text-gray-400">No students yet.</p>
+              ) : visibleStudents.length === 0 ? (
+                <p className="text-sm text-gray-400">No students match your search.</p>
               ) : (
                 <div className="flex flex-col divide-y divide-gray-100">
-                  {students.map(s => (
+                  {visibleStudents.map(s => (
                     <div key={s.id} className="flex items-center justify-between py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-semibold text-xs">

@@ -10,6 +10,7 @@ export type AuditCategory =
   | 'announcements'
   | 'settings'
   | 'security'
+  | 'feedback'
 
 export const AUDIT_CATEGORIES: { key: AuditCategory; label: string }[] = [
   { key: 'points', label: 'Points' },
@@ -20,6 +21,7 @@ export const AUDIT_CATEGORIES: { key: AuditCategory; label: string }[] = [
   { key: 'announcements', label: 'Announcements' },
   { key: 'settings', label: 'Settings' },
   { key: 'security', label: 'Security' },
+  { key: 'feedback', label: 'Suggestions and reports' },
 ]
 
 export type ActionMeta = {
@@ -73,6 +75,10 @@ export const AUDIT_ACTIONS = {
 
   // Settings
   'settings.changed': { label: 'Setting changed', emoji: '⚙️', color: BLUE, category: 'settings', discord: true },
+
+  // Suggestions and reports
+  'feedback.submitted': { label: 'Suggestion or report sent', emoji: '📬', color: AMBER, category: 'feedback', discord: true },
+  'feedback.updated': { label: 'Suggestion or report updated', emoji: '📋', color: BLUE, category: 'feedback', discord: true },
 
   // Security
   'auth.login': { label: 'Signed in', emoji: '🔓', color: GREY, category: 'security', discord: false },

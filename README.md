@@ -31,6 +31,7 @@
 - [Roles and permissions](#roles-and-permissions)
 - [Security model](#security-model)
 - [Audit log](#audit-log)
+- [Suggestions and reports](#suggestions-and-reports)
 - [Deploying to Vercel](#deploying-to-vercel)
 - [Running it day to day](#running-it-day-to-day)
 - [Known limitations](#known-limitations)
@@ -50,6 +51,7 @@ Common Room has two experiences in one website. Each person only sees the tools 
 | **Jobs** | Submit a finished job and track it while it waits for review |
 | **Rewards** | Browse rewards and request one (the cost is held straight away) |
 | **Leaderboard** | See the top 10 by points earned and their own rank, only when the committee turns it on |
+| **Feedback** | Send a suggestion or a report, and see the status and the committee's reply |
 | **Account** | Change their own password |
 
 The student area is built to work well on a phone, with a bottom navigation bar on small screens.
@@ -60,8 +62,9 @@ The student area is built to work well on a phone, with a bottom navigation bar 
 |------|---------------------------|
 | **Overview** | See student count, pending reviews and recent activity |
 | **Award Points** | Give or take away points with a recorded reason |
-| **Review Queue** | Approve or decline job submissions and reward requests |
-| **Students** | See every balance and reset a forgotten password |
+| **Review Queue** | Approve or decline job submissions and reward requests. A reason is required when declining, and the student sees it |
+| **Inbox** | Read suggestions and reports, set a status and reply to the student |
+| **Students** | Search every balance by name or username, and reset a forgotten password |
 | **Add Students** | Create accounts in bulk from a pasted list of names, with generated usernames and random passwords (downloadable as CSV) |
 | **Jobs / Rewards** | Add, edit, hide or show items, and choose which jobs students can submit themselves |
 | **Challenges** | Set shared goals, track progress and pay out a reward to every student once |
@@ -217,6 +220,7 @@ create table redemptions (
   reward_id uuid not null references rewards(id),
   status text not null default 'pending' check (status in ('pending', 'approved', 'declined')),
   reviewed_by uuid references users(id),
+  decline_reason text,
   created_at timestamptz default now()
 );
 
@@ -237,6 +241,7 @@ create table job_submissions (
   job_id uuid not null references jobs(id),
   status text not null default 'pending' check (status in ('pending', 'approved', 'declined')),
   reviewed_by uuid references users(id),
+  decline_reason text,
   created_at timestamptz default now()
 );
 
@@ -278,6 +283,27 @@ create table login_attempts (
 
 create index login_attempts_username_idx on login_attempts (username, created_at);
 create index login_attempts_ip_idx on login_attempts (ip, created_at);
+
+-- ============ Suggestions and reports ============
+create table feedback (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  user_id uuid references users(id) on delete set null,
+  type text not null check (type in ('suggestion', 'report')),
+  category text not null check (category in (
+    'job_idea', 'reward_idea', 'other_suggestion',
+    'supplies', 'broken', 'behaviour', 'other_report'
+  )),
+  message text not null,
+  hide_name boolean not null default false,
+  status text not null default 'new' check (status in ('new', 'reviewing', 'done', 'dismissed')),
+  response text,
+  responded_by uuid references users(id) on delete set null,
+  responded_at timestamptz
+);
+
+create index feedback_status_idx on feedback (status, created_at desc);
+create index feedback_user_idx on feedback (user_id, created_at desc);
 
 -- ============ Audit log (append-only record of what happened) ============
 create table audit_log (
@@ -324,6 +350,7 @@ alter table challenges enable row level security;
 alter table settings enable row level security;
 alter table login_attempts enable row level security;
 alter table audit_log enable row level security;
+alter table feedback enable row level security;
 ```
 
 </details>
@@ -372,6 +399,7 @@ src/
 │   │   ├── jobs/
 │   │   ├── rewards/
 │   │   ├── leaderboard/
+│   │   ├── feedback/
 │   │   └── account/
 │   ├── committee/                Committee dashboard (tabbed)
 │   └── api/
@@ -385,12 +413,14 @@ src/
 │   ├── StudentShell.tsx          Student layout and useStudent() hook
 │   ├── ChangePasswordForm.tsx
 │   └── committee/                ItemsManager, AnnouncementsManager,
-│                                 ChallengesManager, SettingsPanel, AuditLog
+│                                 ChallengesManager, SettingsPanel, AuditLog,
+│                                 FeedbackInbox
 └── lib/
     ├── session.ts                Cookie sessions and requireRole() guard
     ├── audit.ts                  logAudit(): saves an event and posts it to Discord
     ├── audit-meta.ts             Event types, labels, emoji and colours
     ├── discord.ts                Sends embeds to the Discord webhook
+    ├── feedback-meta.ts          Suggestion and report categories and statuses
     ├── supabase-server.ts        Service-role database client (server only)
     └── supabase.ts               Public client (not currently used)
 
@@ -450,6 +480,7 @@ Every important action is recorded in the `audit_log` table, with the person who
 | Challenges | Created, progress updated, completed and paid out, removed |
 | Announcements | Posted, deleted |
 | Settings | Leaderboard turned on or off |
+| Suggestions and reports | Sent, and status or reply updated |
 | Security | Sign-ins, and sign-in lockouts |
 
 Passwords are never written to the log. Names are saved as they were at the time, so entries still make sense if an account is later deleted.
@@ -464,6 +495,25 @@ When `DISCORD_WEBHOOK_URL` is set, each event is also posted to a private Discor
 4. Open **Audit Log** and click **Send test message**.
 
 Mentions such as `@everyone` in anything a user types are switched off in the messages, so they cannot ping anyone. Logging never blocks an action: if the database or Discord is unavailable, the action still goes through and the problem is written to the server logs.
+
+---
+
+## Suggestions and reports
+
+Students have a **Feedback** page with two options, and the committee reads everything in the **Inbox** tab.
+
+| Type | Categories |
+|------|------------|
+| Suggestion | New job idea, new reward idea, other suggestion |
+| Report | Supplies needed, something broken or unsafe, behaviour or rules, other report |
+
+- Each item has a status (new, looking into it, done, not going ahead) and an optional reply. Students see both on their Feedback page.
+- A student can send up to 5 a day.
+- **Hide my name.** When sending a report, a student can hide their name from the committee. Admins can still see it, and the form tells students this, so it is only for dealing with misuse.
+- **Privacy for behaviour reports.** The text of a behaviour report is not copied to Discord or the audit log, which only record that one was sent. It is only readable in the Inbox.
+- The form tells students to speak to a teacher about anything serious or urgent, and the Inbox reminds the committee to handle behaviour reports carefully.
+
+Because reports can name other students, agree as a committee who reads them and what happens next before turning this on for everyone.
 
 ---
 

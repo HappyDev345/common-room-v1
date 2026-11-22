@@ -6,6 +6,7 @@ type SubmissionRow = {
   id: string
   status: string
   created_at: string
+  decline_reason: string | null
   jobs: { name: string }
 }
 
@@ -13,6 +14,7 @@ type RedemptionRow = {
   id: string
   status: string
   created_at: string
+  decline_reason: string | null
   rewards: { name: string; cost: number }
 }
 
@@ -29,12 +31,12 @@ export async function GET() {
       .order('created_at', { ascending: false }),
     supabaseServer
       .from('job_submissions')
-      .select('id, status, created_at, jobs(name)')
+      .select('id, status, created_at, decline_reason, jobs(name)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false }),
     supabaseServer
       .from('redemptions')
-      .select('id, status, created_at, rewards(name, cost)')
+      .select('id, status, created_at, decline_reason, rewards(name, cost)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false }),
   ])

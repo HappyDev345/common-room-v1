@@ -26,6 +26,7 @@ const NAV = [
   { href: '/jobs', label: 'Jobs', icon: '🛠️' },
   { href: '/rewards', label: 'Rewards', icon: '🎁' },
   { href: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
+  { href: '/feedback', label: 'Feedback', icon: '💬' },
   { href: '/account', label: 'Account', icon: '🔒' },
 ]
 
@@ -129,7 +130,7 @@ export default function StudentShell({ children }: { children: ReactNode }) {
           <Link
             key={item.href}
             href={item.href}
-            className={`flex-1 text-center py-3 text-xs font-medium ${
+            className={`flex-1 text-center py-3 text-[10px] font-medium ${
               pathname === item.href ? 'text-blue-700' : 'text-gray-400'
             }`}
           >

@@ -17,6 +17,7 @@ type RequestItem = {
   label: string
   status: string
   created_at: string
+  reason: string | null
 }
 
 type Summary = {
@@ -24,8 +25,8 @@ type Summary = {
   held: number
   available: number
   transactions: Transaction[]
-  submissions: { id: string; status: string; created_at: string; jobs: { name: string } }[]
-  redemptions: { id: string; status: string; created_at: string; rewards: { name: string } }[]
+  submissions: { id: string; status: string; created_at: string; decline_reason: string | null; jobs: { name: string } }[]
+  redemptions: { id: string; status: string; created_at: string; decline_reason: string | null; rewards: { name: string } }[]
 }
 
 type Announcement = {
@@ -90,6 +91,7 @@ export default function DashboardPage() {
       label: s.jobs?.name ?? 'Job',
       status: s.status,
       created_at: s.created_at,
+      reason: s.decline_reason,
     })),
     ...summary.redemptions.map(r => ({
       id: r.id,
@@ -97,6 +99,7 @@ export default function DashboardPage() {
       label: r.rewards?.name ?? 'Reward',
       status: r.status,
       created_at: r.created_at,
+      reason: r.decline_reason,
     })),
   ]
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
@@ -166,6 +169,9 @@ export default function DashboardPage() {
                   <div>
                     <div className="text-sm font-medium text-gray-900">{r.label}</div>
                     <div className="text-xs text-gray-400 mt-0.5">{r.kind} · {formatDate(r.created_at)}</div>
+                    {r.status === 'declined' && r.reason && (
+                      <div className="text-xs text-red-600 mt-1">Reason: {r.reason}</div>
+                    )}
                   </div>
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${BADGE[r.status] || ''}`}>
                     {r.status}
